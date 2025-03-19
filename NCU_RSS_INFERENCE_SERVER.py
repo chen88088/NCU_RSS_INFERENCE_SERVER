@@ -711,6 +711,83 @@ def record_mlflow(request: DagRequest, output_dir: str):
         mlflow.log_artifact(os.path.join(output_dir, "val_acc.png"))
         mlflow.log_artifact(excel_path)
 
+# [Inference/UploadInferenceOutputFiles]
+@app.post("/Inference/UploadInferenceOutputFiles")
+def upload_inference_output_files(request: DagRequest):
+    dag_id = request.DAG_ID
+    execution_id = request.EXECUTION_ID
+    task_stage_type = request.TASK_STAGE_TYPE
+
+    if not dag_id or not execution_id:
+        raise HTTPException(status_code=400, detail="DAG_ID and EXECUTION_ID are required.")
+    
+    
+    # 獲取對應的 Logger 和 DVCWorker
+    logger = logger_manager.get_logger(dag_id, execution_id)
+    if logger:
+        logger_manager.log_section_header(logger, "Inference/UploadInferenceOutputFiles")
+
+    dvc_worker = dvc_manager.get_worker(dag_id, execution_id)
+
+    logger.info("Received request to upload files")
+
+    
+    try:
+        # 組合路徑：/mnt/storage/{dag_id}_{execution_id}
+        dag_root_folder_path = os.path.join(STORAGE_PATH, f"{dag_id}_{execution_id}")
+        root_folder_path = Path(dag_root_folder_path)
+        repo_inference_path = os.path.join(dag_root_folder_path, "NCU-RSS-1.5")
+
+        upload_source_folder = Path(os.path.join(repo_inference_path,"data/inference/saved_model_and_prediction"))
+
+        # 注意：按照原腳本產生名為 "model" 的文件夾 命名為result_folder
+        result_folder = "model"
+        
+        # 初始化本地dvc倉庫，並配置 MinIO as remote-storage
+        # dvc_repo should be the to-be-uploaded-folder's parent folder
+        dvc_repo = upload_source_folder
+        logger.info(f"Initializing DVC repository at {dvc_repo}")
+        
+        init_result = dvc_worker.initialize_dvc(dvc_repo, task_stage_type)
+        if init_result["status"] == "error":
+            logger.error(f"Failed to initialize DVC: {init_result['message']}")
+            raise HTTPException(status_code=500, detail=init_result["message"])
+
+        # 使用 DVC 管理文件夾並且推送到 MinIO
+        logger.info(f"Adding and pushing folder {result_folder} to DVC")
+        add_and_push_mask_result = dvc_worker.add_and_push_data(
+            folder_path=f"{dvc_repo}/{result_folder}",
+            folder_name=result_folder,
+            stage_type= task_stage_type
+        )
+        if add_and_push_mask_result["status"] == "error":
+            logger.error(f"Failed to add and push {result_folder}: {add_and_push_mask_result['message']}")
+            raise HTTPException(status_code=500, detail=add_and_push_mask_result["message"])
+
+        
+        # 提交所有更改並推送到 Git
+        logger.info(f"Committing and pushing DVC changes for {result_folder} and {result_folder} to Git")
+        git_commit_result = dvc_worker.git_add_commit_and_push(
+            project_path=root_folder_path,
+            message=f"Add and track folder {result_folder}  with DVC"
+        )
+        if git_commit_result["status"] == "error":
+            logger.error(f"Failed to commit and push to Git: {git_commit_result['message']}")
+            raise HTTPException(status_code=500, detail=git_commit_result["message"])
+
+        logger.info(f"Successfully added and pushed {result_folder} to DVC and Git")
+
+        # sucess 
+        logger.info(f"[Inference]UploadInferenceOutputFiles finished for dag: {dag_id}_{execution_id}   !!!")
+
+        return {"status": "success", "message": f"The folders '{result_folder}' have been added and pushed to DVC."}
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Unexpected error occurred: {str(e)}")
+        return {"status": "error", "message": str(e)}, 500
+
 
 @app.post("/Inference/UploadLogToS3")
 async def upload_log_to_s3(request: DagRequest):
