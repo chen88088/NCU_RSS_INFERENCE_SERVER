@@ -88,11 +88,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# # PVC 掛載路徑
-# STORAGE_PATH = "/mnt/storage"
+# PVC 掛載路徑
+STORAGE_PATH = "/mnt/storage"
 
-# PVC 掛載路徑 (本地測試用)
-STORAGE_PATH = "/mnt/storage/test/test_inference"
+# # PVC 掛載路徑 (本地測試用)
+# STORAGE_PATH = "/mnt/storage/test/test_inference"
 
 
 # MinIO 設定
@@ -149,9 +149,11 @@ def parse_dvc_file(dvc_file_path):
     
 # 初始化 Kubernetes 客戶端
 def init_k8s_client():
-    # 若在 K8s Cluster 內執行，則使用 In-Cluster Config
-    config.load_incluster_config()
-    return client.CoreV1Api()
+    try:
+        config.load_incluster_config()  # Kubernetes 內部環境
+    except config.ConfigException:
+        config.load_kube_config()  # 本機開發環境
+    return client.BatchV1Api()
 
 # 實例化 LoggerManager
 logger_manager = LoggerManager()
@@ -176,9 +178,9 @@ async def register_dag_and_logger_and_dvc_worker(request: DagRequest):
     if not dag_id or not execution_id:
         raise HTTPException(status_code=400, detail="DAG_ID and EXECUTION_ID are required.")
     
-    # # 檢查 PVC 掛載狀態
-    # if not is_pvc_mounted():
-    #     raise HTTPException(status_code=500, detail="PVC is not mounted.")
+    # 檢查 PVC 掛載狀態
+    if not is_pvc_mounted():
+        raise HTTPException(status_code=500, detail="PVC is not mounted.")
 
     # 組合路徑：/mnt/storage/{dag_id}_{execution_id}
     dag_root_folder_path = os.path.join(STORAGE_PATH, f"{dag_id}_{execution_id}")
@@ -236,10 +238,10 @@ async def setup_folders_for_training(request: DagRequest):
     dvc_worker = dvc_manager.get_worker(dag_id, execution_id)
     
     
-    # # 檢查 PVC 掛載狀態
-    # if not is_pvc_mounted():
-    #     raise HTTPException(status_code=500, detail="PVC is not mounted.")
-    # logger.info("PVC IS MOUNTED!!!!")
+    # 檢查 PVC 掛載狀態
+    if not is_pvc_mounted():
+        raise HTTPException(status_code=500, detail="PVC is not mounted.")
+    logger.info("PVC IS MOUNTED!!!!")
 
     # 組合路徑：/mnt/storage/{dag_id}_{execution_id}
     dag_root_folder_path = os.path.join(STORAGE_PATH, f"{dag_id}_{execution_id}")
@@ -264,15 +266,24 @@ async def setup_folders_for_training(request: DagRequest):
 
         # 2. 在 dag_root_folder 内 git clone
         if not os.path.exists(repo_inference_path):
-            # # 取得環境變數中的 GITHUB_TOKEN
-            # github_token = os.getenv("GITHUB_TOKEN")
-            # if not github_token:
-            #     raise Exception("GITHUB_TOKEN not found in environment variables.")
+            # 取得環境變數中的 GITHUB_TOKEN
+            github_token = os.getenv("GITHUB_TOKEN")
+            if not github_token:
+                raise Exception("GITHUB_TOKEN not found in environment variables.")
+            
+            # 解析 repo 的 owner/repo_name
+            if "github.com" in code_repo_url:
+                repo_path = code_repo_url.split("github.com/")[-1]
+            else:
+                raise HTTPException(status_code=400, detail="Invalid GitHub repository URL")
+
+            
+            # repo_url = "https://github.com/chen88088/NCU-RSS-1.5.git"
 
             # # 使用 subprocess.run() 執行 git clone 指令
             # # **修正：直接內嵌 GITHUB_TOKEN 到 URL 中**
             # repo_url = f"https://{github_token}:x-oauth-basic@github.com/chen88088/NCU-RSS-1.5.git"
-            repo_url = "https://github.com/chen88088/NCU-RSS-1.5.git"
+            repo_url = f"https://{github_token}:x-oauth-basic@github.com/{repo_path}"
 
             clone_command = ["git", "clone", repo_url, repo_inference_path]
             result = subprocess.run(clone_command, capture_output=True, text=True)
@@ -319,9 +330,9 @@ async def download_preprocessing_result(request: DagRequest):
 
     dvc_worker = dvc_manager.get_worker(dag_id, execution_id)
 
-    # # 檢查 PVC 掛載狀態
-    # if not is_pvc_mounted():
-    #     raise HTTPException(status_code=500, detail="PVC is not mounted.")
+    # 檢查 PVC 掛載狀態
+    if not is_pvc_mounted():
+        raise HTTPException(status_code=500, detail="PVC is not mounted.")
 
     try:
         # 設定本地 DAG 路徑
@@ -454,7 +465,7 @@ async def fetch_model(request: DagRequest):
     except Exception as e:
         return {"status": "error", "message": str(e)}, 500
 
-
+'''
 # TODO: CONFIG MODIFY
 # [Inference/ModifyPreprocessingConfig]
 @app.post("/INFERENCE/preprocessing/ModifyPreprocessingConfig")
@@ -504,13 +515,14 @@ async def modify_preprocessing_config(request: Request):
         raise HTTPException(status_code=500, detail=f"Config modification failed: {str(e)}")
 
     return {"status": "success", "message": "Config modified successfully"}
-
-
+'''
+'''
 # # [Training/ModifyConfig]
 # @app.post("/Training/ModifyConfig")
 # async def modify_config(request: DagRequest):
 #     # pass
 #     return {"status": "success", "message": f"Config Mofification Successfully!!"}
+'''
 
 # [Inference/ExecuteInferenceScripts]
 @app.post("/Inference/ExecuteInferenceScripts")
@@ -530,11 +542,11 @@ async def execute_inference_scripts(request: DagRequest):
     # 獲取 Logger 和 DVCWorker
     logger = logger_manager.get_logger(dag_id, execution_id)
     if logger:
-        logger_manager.log_section_header(logger, "Training/ExecuteTrainingScripts")
+        logger_manager.log_section_header(logger, "Inference/ExecuteTrainingScripts")
     
 
     # v1 = init_k8s_client()
-    batch_v1 = client.BatchV1Api()  # 初始化 Batch API 用於創建 Job
+    batch_v1 = init_k8s_client()  # 初始化 Batch API 用於創建 Job
     
     # # Pod 名稱
     # pod_name = f"{dag_id}-{execution_id}-{task_stage_type}-task-pod-{uuid.uuid4().hex[:6]}"
@@ -713,13 +725,19 @@ def record_mlflow(request: DagRequest, output_dir: str):
 
 # [Inference/UploadInferenceOutputFiles]
 @app.post("/Inference/UploadInferenceOutputFiles")
-def upload_inference_output_files(request: DagRequest):
+async def upload_inference_output_files(request: DagRequest):
     dag_id = request.DAG_ID
     execution_id = request.EXECUTION_ID
     task_stage_type = request.TASK_STAGE_TYPE
 
+    deployer_name = request.DEPLOYER_NAME
+    deployer_email = request.DEPLOYER_EMAIL
+
     if not dag_id or not execution_id:
         raise HTTPException(status_code=400, detail="DAG_ID and EXECUTION_ID are required.")
+    
+    if not deployer_name or not deployer_email:
+        raise HTTPException(status_code=400, detail="DEPLOYER_NAME and DEPLOYER_EMAIL are required.")
     
     
     # 獲取對應的 Logger 和 DVCWorker
@@ -767,6 +785,13 @@ def upload_inference_output_files(request: DagRequest):
         
         # 提交所有更改並推送到 Git
         logger.info(f"Committing and pushing DVC changes for {result_folder} and {result_folder} to Git")
+        import subprocess
+
+        # 設定 Git 用戶資訊
+
+        subprocess.run(["git", "config", "--global", "user.name", f"{deployer_name}"], check=True)
+        subprocess.run(["git", "config", "--global", "user.email", f"{deployer_email}"], check=True)
+
         git_commit_result = dvc_worker.git_add_commit_and_push(
             project_path=root_folder_path,
             message=f"Add and track folder {result_folder}  with DVC"
@@ -1047,13 +1072,7 @@ def record_mlflow(request: DagRequest, output_dir: str):
         mlflow.log_artifact(os.path.join(output_dir, "val_acc.png"))
         mlflow.log_artifact(excel_path)
 
-
-
-
 #################################################################
-
-
-
 
 # @app.post("/INFERENCE/preprocessing/ExecutePredictPreprocessing")
 # async def execute_predict_preprocessing(request: Request):
@@ -1663,10 +1682,7 @@ def record_mlflow(request: DagRequest, output_dir: str):
 #     except Exception as e:
 #         logger.error(f"An error occurred: {str(e)}")
 #         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
-# '''
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("MachineServer:app", host=MACHINE_IP, port=MACHINE_PORT, reload=True)
-
-
-
