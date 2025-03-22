@@ -786,7 +786,6 @@ async def upload_inference_output_files(request: DagRequest):
         
         # 提交所有更改並推送到 Git
         logger.info(f"Committing and pushing DVC changes for {result_folder} and {result_folder} to Git")
-        import subprocess
 
         # 設定 Git 用戶資訊
 
