@@ -8,7 +8,7 @@ class LoggerManager:
         self.loggers = {}
 
     def init_logger(self, dag_id: str, execution_id: str, log_folder_root_path: str):
-        """初始化logger並存储到 loggers 字典中"""
+        """初始化logger並存到 loggers 字典中"""
         # 創建專屬的 DAG 目錄
         log_folder_root_path = Path(log_folder_root_path)
 
