@@ -10,7 +10,10 @@ class LoggerManager:
     def init_logger(self, dag_id: str, execution_id: str, log_folder_root_path: str):
         """初始化logger並存储到 loggers 字典中"""
         # 創建專屬的 DAG 目錄
-        dag_logs_folder = Path.home() / "Desktop" / log_folder_root_path/ "LOGS" 
+        log_folder_root_path = Path(log_folder_root_path)
+
+        dag_logs_folder = log_folder_root_path/ "LOGS"
+        dag_logs_folder = Path(dag_logs_folder)
         dag_logs_folder.mkdir(parents=True, exist_ok=True)
 
         # 生成唯一的日誌文件路徑（加入時間戳記防止衝突）

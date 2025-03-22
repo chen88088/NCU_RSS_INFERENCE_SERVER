@@ -11,7 +11,7 @@
             "request": "launch",
             "module": "uvicorn",
             "args": [
-                "NCU_RSS_INFERENCE_SERVER:app",
+                "NCU_RSS_Inference_Server:app",
                 "--reload",
                 "--host", "10.52.52.142",
                 "--port", "8087"
