@@ -31,6 +31,7 @@ import pandas as pd
 from minio import Minio
 from minio.error import S3Error
 import uuid
+import hashlib
 
 import time
 import json
@@ -557,7 +558,11 @@ async def execute_inference_scripts(request: DagRequest):
     # 將 _ 換成 -，轉小寫，並移除不合法字元
     job_name = re.sub(r'[^a-z0-9\-]+', '', raw_job_name.lower().replace('_', '-'))
 
-    
+    # 長度限制處理（K8s label/name 最多 63 字元）
+    if len(job_name) > 63:
+        hash_suffix = hashlib.sha1(job_name.encode()).hexdigest()[:6]
+        job_name = f"{job_name[:56]}-{hash_suffix}"
+
     # 確保 PVC_NAME 環境變量已設定
     pvc_name = os.getenv("PVC_NAME")
     if not pvc_name:
