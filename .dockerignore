@@ -1,0 +1,12 @@
+# 忽略虛擬環境
+VENV_NCURSS_INFERENCE_SERVER/
+
+# 忽略其他不必要的東西（可選）
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+.git/
+.idea/
+.vscode/

@@ -16,7 +16,7 @@ from LoggerManager import LoggerManager
 from kubernetes import client, config
 from DVCManager import DVCManager
 from DVCWorker import DVCWorker
-from typing import Dict
+from typing import Dict, Any
 from LoggerManager import LoggerManager
 from DagManager import DagManager
 from fastapi.responses import JSONResponse
@@ -36,7 +36,7 @@ import hashlib
 import time
 import json
 
-# 设置基本的日志配置
+
 logging.basicConfig(level=logging.DEBUG)
 
 SERVER_MANAGER_URL = "http://10.52.52.136:8000"
@@ -120,7 +120,7 @@ class DagRequest(BaseModel):
     MODEL_VERSION: str
     DEPLOYER_NAME: str
     DEPLOYER_EMAIL: str
-    PIPELINE_CONFIG: Dict[str, str]
+    PIPELINE_CONFIG: Dict[str, Any]
 
 
 # 檢查 PVC 是否已掛載
@@ -466,65 +466,6 @@ async def fetch_model(request: DagRequest):
 
     except Exception as e:
         return {"status": "error", "message": str(e)}, 500
-
-
-# # TODO: CONFIG MODIFY
-# # [Inference/ModifyPreprocessingConfig]
-# @app.post("/INFERENCE/preprocessing/ModifyPreprocessingConfig")
-# async def modify_preprocessing_config(request: Request):
-#     data = await request.json()
-#     dag_id = data.get("DAG_ID")
-#     execution_id = data.get("EXECUTION_ID")
-#     inference_root_folder_name = data.get("inference_root_folder")
-
-#     if not dag_id or not execution_id:
-#         raise HTTPException(status_code=400, detail="DAG_ID and EXECUTION_ID are required.")
-
-#     # 获取或初始化 Logger 和 DVCWorker
-#     logger = logger_manager.get_logger(dag_id, execution_id)
-
-#     try:
-#         moa_inference_folder = Path.home() / "Desktop" / inference_root_folder_name
-#         root_folder_path = Path(moa_inference_folder)
-#         repo_preprocessing_path = Path(root_folder_path / "NCU-RSS-Predict-Preprocessing")
-#         config_path = Path(root_folder_path / "NCU-RSS-Predict-Preprocessing" / "configs" / "config.py")
-
-#         logger.info(f"Modifying config at {config_path} with data: {data}")
-
-#         # 读取并修改配置文件
-#         with open(config_path, "r", encoding='utf-8') as file:
-#             config_content = file.read()
-#         config_content = config_content.replace(r'D:\SHP', data["SHP_Path"])
-#         config_content = config_content.replace(r'D:\TIF', data["TIF_Path"])
-#         config_content = config_content.replace(r'C:\Users\chen88088\Desktop', str(repo_preprocessing_path))
-        
-#         with open(config_path, "w", encoding='utf-8') as file:
-#             file.write(config_content)
-#         logger.info(f"Config file {config_path} modified successfully")
-
-#         # 验证文件内容
-#         with open(config_path, "r", encoding='utf-8') as file:
-#             verified_content = file.read()
-#         assert data["SHP_Path"] in verified_content, "SHP_Path not updated"
-#         assert data["TIF_Path"] in verified_content, "TIF_Path not updated"
-#         assert str(repo_preprocessing_path) in verified_content, "directory not updated"
-#         logger.info(f"Config file {config_path} verification successful")
-        
-#         logger.info(f"[preprocessing]ModifyPreprocessingConfig finished for dag: {dag_id}_{execution_id}   !!!")
-
-#     except Exception as e:
-#         logger.error(f"An error occurred during config modification: {str(e)}")
-#         raise HTTPException(status_code=500, detail=f"Config modification failed: {str(e)}")
-
-#     return {"status": "success", "message": "Config modified successfully"}
-
-
-# # # [Training/ModifyConfig]
-# # @app.post("/Training/ModifyConfig")
-# # async def modify_config(request: DagRequest):
-# #     # pass
-# #     return {"status": "success", "message": f"Config Mofification Successfully!!"}
-
 
 # [Inference/ExecuteInferenceScripts]
 @app.post("/Inference/ExecuteInferenceScripts")
